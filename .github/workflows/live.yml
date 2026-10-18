@@ -1,0 +1,33 @@
+name: live
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: live
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python monitor.py live
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          EVENT: ${{ github.event_name }}
+      - name: heartbeat commit
+        if: always()
+        run: |
+          date -u +%FT%TZ > heartbeat.txt
+          git config user.name bot && git config user.email bot@users.noreply.github.com
+          git add heartbeat.txt state.json 2>/dev/null || true
+          git commit -m "heartbeat" || true
+          git pull --rebase || true
+          git push || true
