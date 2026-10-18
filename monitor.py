@@ -206,22 +206,37 @@ def live(hours=5.75):
     except Exception: state = {}
     if os.environ.get("EVENT") == "workflow_dispatch":
         notify("감시 시작", f"{len(m)}개 종목 15분봉 감시 중" + (f"\n미매칭: {', '.join(miss)}" if miss else ""), 3)
+    order = ["BTC"] + [n for n in m if n != "BTC"]
     stop = time.time() + hours * 3600
     while time.time() < stop:
         nxt = (int(time.time()) // BAR + 1) * BAR + 8
         time.sleep(max(1, nxt - time.time()))
-        for name, (kind, sym) in m.items():
+        btc_ret = None
+        for name in order:
+            kind, sym = m[name]
             rows = candles(kind, sym, limit=120)
             if len(rows) < 60: continue
+            c = [r[4] for r in rows]
+            ret = c[-1] / c[-17] - 1
+            if name == "BTC":
+                btc_ret = ret; continue
             d = indicators(rows); i = len(rows) - 1
             sig = detect(d, i)
-            if not sig: continue
-            st, info = sig; key = f"{name}:{st}"
-            if rows[i][0] - state.get(key, 0) < 8 * BAR: continue
-            state[key] = rows[i][0]
-            t, b = message(name, st, info, rows[i][0]); notify(t, b)
-            print("ALERT", t, b.replace("\n", " | "))
-            time.sleep(0.1)
+            if not sig or btc_ret is None: continue
+            st, info = sig; t = rows[i][0]
+            rs = ret - btc_ret
+            if st == 1:
+                state[f"{name}:s1seen"] = t
+                if rs < 0.01: continue
+            if st == 2 and not any((detect(d, j) or (0,))[0] == 1 for j in range(i - 12, i)): continue
+            key = f"{name}:{st}"
+            if t - state.get(key, 0) < 8 * BAR: continue
+            state[key] = t
+            title, body = message(name, st, info, t)
+            body += f"\nBTC 대비 4시간 {rs*100:+.2f}%p"
+            if st == 1 and rs >= 0.02: title = "🔥 " + title
+            notify(title, body)
+            print("ALERT", title, body.replace("\n", " | "))
         json.dump(state, open(stfile, "w"))
     json.dump(state, open(stfile, "w"))
 
