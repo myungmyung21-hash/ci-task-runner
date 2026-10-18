@@ -139,6 +139,31 @@ def detect(d, i):
     return None
 
 
+def atr(d, i, n=14):
+    h, l, c = d["h"], d["l"], d["c"]
+    tr = [max(h[k] - l[k], abs(h[k] - c[k - 1]), abs(l[k] - c[k - 1])) for k in range(i - n + 1, i + 1)]
+    return sum(tr) / n
+
+
+def hold2(d, i, win=16):
+    """저점을 양봉으로 2회 지킴: 이번 봉(양봉)이 두 번째 방어"""
+    o, h, l, c = d["o"], d["h"], d["l"], d["c"]
+    if i < win + 20: return None
+    if not c[i] > o[i]: return None
+    a = atr(d, i)
+    if a <= 0: return None
+    for k in range(i - 3, i - win - 1, -1):
+        if not c[k] > o[k]: continue
+        sup = min(l[k], l[i])
+        if abs(l[i] - l[k]) > 0.5 * a: continue
+        if min(l[k:i + 1]) < sup - 0.1 * a: continue          # 사이에 지지선 이탈 없음
+        if min(c[k:i + 1]) < sup: continue                    # 종가 이탈 없음
+        if max(h[k + 1:i]) < sup + 1.0 * a: continue          # 두 번 사이에 반등이 있어야 2회
+        if min(l[k - 6:k]) < sup - 0.1 * a: continue          # 첫 방어도 그 구간 저점이어야 함
+        return dict(price=c[i], sup=sup, first=k)
+    return None
+
+
 def fmt(x):
     return f"{x:.6g}"
 
@@ -156,6 +181,12 @@ def message(name, stage, info, t, rs=0.0):
         body = (f"{tk} 빌드 · 현재값 {fmt(info['price'])}\n"
                 f"부하 {info['volx']:.1f}x · 상한 {fmt(info['ub'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
     return title, body
+
+
+def message_hold(name, info, t, rs=0.0):
+    tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
+    return (f"[News summary] {CODE.get(name, name)} 요약 도착",
+            f"{tk} 업데이트 · 현재값 {fmt(info['price'])}\n기준 {fmt(info['sup'])} · 점수 {rs*100:+.2f}")
 
 
 def notify(title, body, prio=4, tag="robot"):
@@ -227,6 +258,12 @@ def live(hours=5.75):
             if name == "BTC":
                 btc_ret = ret; continue
             d = indicators(rows); i = len(rows) - 1
+            hd = hold2(d, i)
+            if hd and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
+                state[f"{name}:h"] = rows[i][0]
+                title, body = message_hold(name, hd, rows[i][0], ret - btc_ret)
+                notify(title, body, 4, "newspaper")
+                print("ALERT", title, body.replace("\n", " | "))
             sig = detect(d, i)
             if not sig or btc_ret is None: continue
             st, info = sig; t = rows[i][0]
