@@ -8,6 +8,10 @@ TOPIC = os.environ.get("NTFY_TOPIC", "")
 WATCH = ["HBAR", "SUI", "ETH", "PEPE", "BTC", "WLD", "SOL", "TSLA", "ADA", "XRP",
          "GOOGL", "DOGE", "SHIB", "ONDO", "SPCX", "BRETT", "MBABYDOGE", "TRUMP", "KAIA"]
 BAR = 900
+CODE = {"HBAR": "Hazel", "SUI": "Sunny", "ETH": "Echo", "PEPE": "Pepper", "BTC": "Bravo",
+        "WLD": "Willow", "SOL": "Solar", "TSLA": "Tango", "ADA": "Aurora", "XRP": "Xenon",
+        "GOOGL": "Gamma", "DOGE": "Delta", "SHIB": "Shadow", "ONDO": "Orbit", "SPCX": "Spark",
+        "BRETT": "Berry", "MBABYDOGE": "Mango", "TRUMP": "Tulip", "KAIA": "Kite"}
 S = requests.Session()
 S.headers["Accept"] = "application/json"
 
@@ -139,25 +143,27 @@ def fmt(x):
     return f"{x:.6g}"
 
 
-def message(name, stage, info, t):
-    tk = datetime.fromtimestamp(t + BAR, KST).strftime("%m/%d %H:%M")
+def message(name, stage, info, t, rs=0.0):
+    tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
+    cn = CODE.get(name, name)
     if stage == 1:
-        title = f"[1단계 눌림] {name} 15분봉"
-        body = (f"{tk} 마감 · 현재 {fmt(info['price'])}\n"
-                f"진입 참고 MB {fmt(info['mb'])} / 손절 참고 SAR {fmt(info['sar'])}")
+        head = "긴급 리뷰 요청" if rs >= 0.02 else "리뷰 요청"
+        title = f"[Coding task] {cn} {head}"
+        body = (f"{tk} 빌드 · 현재값 {fmt(info['price'])}\n"
+                f"기준선 {fmt(info['mb'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
     else:
-        title = f"[2단계 돌파] {name} 15분봉"
-        body = (f"{tk} 마감 · 현재 {fmt(info['price'])}\n"
-                f"거래량 MA10의 {info['volx']:.1f}배 · UB {fmt(info['ub'])} · SAR {fmt(info['sar'])}")
+        title = f"[AI 테스트] {cn} 배포 완료"
+        body = (f"{tk} 빌드 · 현재값 {fmt(info['price'])}\n"
+                f"부하 {info['volx']:.1f}x · 상한 {fmt(info['ub'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
     return title, body
 
 
-def notify(title, body, prio=4):
+def notify(title, body, prio=4, tag="robot"):
     if not TOPIC:
         print("[no topic]", title, body); return
     try:
         S.post("https://ntfy.sh/", json={"topic": TOPIC, "title": title, "message": body,
-                                         "priority": prio, "tags": ["chart_with_upwards_trend"]}, timeout=10)
+                                         "priority": prio, "tags": [tag]}, timeout=10)
     except Exception as e:
         print("ntfy fail", e)
 
@@ -205,7 +211,7 @@ def live(hours=5.75):
     try: state = json.load(open(stfile))
     except Exception: state = {}
     if os.environ.get("EVENT") == "workflow_dispatch":
-        notify("감시 시작", f"{len(m)}개 종목 15분봉 감시 중" + (f"\n미매칭: {', '.join(miss)}" if miss else ""), 3)
+        notify("[News summary] 구독 시작", f"{len(m)}개 채널 요약을 15분마다 확인합니다" + (f"\n미연결: {len(miss)}개" if miss else ""), 3, "newspaper")
     order = ["BTC"] + [n for n in m if n != "BTC"]
     stop = time.time() + hours * 3600
     while time.time() < stop:
@@ -232,10 +238,8 @@ def live(hours=5.75):
             key = f"{name}:{st}"
             if t - state.get(key, 0) < 8 * BAR: continue
             state[key] = t
-            title, body = message(name, st, info, t)
-            body += f"\nBTC 대비 4시간 {rs*100:+.2f}%p"
-            if st == 1 and rs >= 0.02: title = "🔥 " + title
-            notify(title, body)
+            title, body = message(name, st, info, t, rs)
+            notify(title, body, 5 if (st == 1 and rs >= 0.02) else 4, "computer" if st == 1 else "robot")
             print("ALERT", title, body.replace("\n", " | "))
         json.dump(state, open(stfile, "w"))
     json.dump(state, open(stfile, "w"))
@@ -245,6 +249,6 @@ if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "live"
     if mode == "backtest":
         backtest(int(sys.argv[2]) if len(sys.argv) > 2 else 30)
-        notify("테스트 알람", "초인종 연결 확인용입니다. 이 알림이 보이면 정상입니다.", 3)
+        notify("[AI 테스트] 연결 확인", "테스트 환경 연결이 정상입니다.", 3, "white_check_mark")
     else:
         live()
