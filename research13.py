@@ -1,7 +1,8 @@
 import time
 from datetime import datetime
 import monitor as M
-from research6 import fetch, rsi
+from research6 import rsi
+from bvdata import fetch_bv, BV
 DAYS = 300
 def outcome(d,i,stop,H=16):
     e=d["c"][i]; R=e-stop
@@ -11,10 +12,10 @@ def outcome(d,i,stop,H=16):
         if d["h"][k]>=e+2*R: return 2.0
     return max(-1.0,min(2.0,(d["c"][i+H]-e)/R))
 m,_=M.resolve(); data={}; now=time.time()
-print(f"요청 기간 {DAYS}일")
-for name,(k,s) in m.items():
-    if name in ("KAIA","MBABYDOGE","BRETT","BTC"): continue
-    r15=fetch(k,s,"15m",DAYS)
+print(f"요청 기간 {DAYS}일 (바이낸스 선물 공개 데이터)")
+for name in BV:
+    if name=="BTC": continue
+    r15,miss=fetch_bv(name,"15m",DAYS)
     if len(r15)<500: print(" ",name,"데이터 부족",len(r15)); continue
     d=M.indicators(r15); d["t"]=[r[0] for r in r15]; d["rsi"]=rsi(d["c"])
     data[name]=d
