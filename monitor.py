@@ -192,30 +192,20 @@ def fmt(x):
 
 
 def message(name, stage, info, t, rs=0.0):
-    tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
     cn = CODE.get(name, name)
     if stage == 1:
-        title = f"[{'주요 분석' if rs >= 0.02 else '분석'}] {cn}"
-        body = (f"{tk} · 지수 {fmt(info['price'])}\n"
-                f"기준 {fmt(info['mb'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
-    else:
-        title = f"[단독] {cn}"
-        body = (f"{tk} · 지수 {fmt(info['price'])}\n"
-                f"거래 {info['volx']*100:.0f}% · 상한 {fmt(info['ub'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
-    return title, body
+        if rs >= 0.02:
+            return f"[주요 분석] {cn}", "주요 분석 기사가 올라왔습니다."
+        return f"[분석] {cn}", "분석 기사가 올라왔습니다."
+    return f"[단독] {cn}", "단독 기사가 올라왔습니다."
 
 
 def message_hold(name, info, t, rs=0.0):
-    tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
-    return (f"[종합] {CODE.get(name, name)}",
-            f"{tk} · 지수 {fmt(info['price'])}\n기준 {fmt(info['sup'])} · 점수 {rs*100:+.2f}")
+    return f"[종합] {CODE.get(name, name)}", "종합 기사가 올라왔습니다."
 
 
 def message_recl(name, info, t, rs, vr):
-    tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
-    return (f"[속보] {CODE.get(name, name)}",
-            f"{tk} · 지수 {fmt(info['price'])}\n기준 {fmt(info['lvl'])} · 하한 {fmt(info['low'])} · "
-            f"투매거래 {info['cvx']*100:.0f}% · 거래 {vr*100:.0f}% · 점수 {rs*100:+.2f}")
+    return f"[속보] {CODE.get(name, name)}", "속보가 들어왔습니다."
 
 
 def notify(title, body, prio=4, tag="newspaper"):
@@ -271,7 +261,7 @@ def live(hours=5.75):
     try: state = json.load(open(stfile))
     except Exception: state = {}
     if os.environ.get("EVENT") == "workflow_dispatch":
-        notify("[알림] 뉴스 구독 시작", f"{len(m)}개 언론사 알림을 받습니다" + (f"\n미연결: {len(miss)}개" if miss else ""), 3, "newspaper")
+        notify("[알림] 뉴스 구독 시작", "구독한 언론사 기사를 알려드립니다.", 3, "newspaper")
     order = ["BTC"] + [n for n in m if n != "BTC"]
     stop = time.time() + hours * 3600
     while time.time() < stop:
@@ -298,7 +288,6 @@ def live(hours=5.75):
             if hd and vr >= 1.5 and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
                 state[f"{name}:h"] = rows[i][0]
                 title, body = message_hold(name, hd, rows[i][0], ret - btc_ret)
-                body += f" · 거래 {vr*100:.0f}%"
                 notify(title, body, 4, "newspaper")
                 print("ALERT", title, body.replace("\n", " | "))
             sig = detect(d, i)
@@ -313,7 +302,6 @@ def live(hours=5.75):
             if t - state.get(key, 0) < 8 * BAR: continue
             state[key] = t
             title, body = message(name, st, info, t, rs)
-            if st == 1: body += f" · 거래 {vratio(d, i)*100:.0f}%"
             notify(title, body, 5 if (st == 1 and rs >= 0.02) else 4, "newspaper")
             print("ALERT", title, body.replace("\n", " | "))
         json.dump(state, open(stfile, "w"))
