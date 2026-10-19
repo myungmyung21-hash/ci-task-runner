@@ -84,6 +84,13 @@ for name, (d, h1) in data.items():
         body = o_[i] - c_[i]; avgb = sum(abs(o_[q] - c_[q]) for q in range(i - 10, i)) / 10
         if body > 0 and avgb > 0 and body >= 2 * avgb and vr >= 2 and max(d["rsi"][i - 8:i]) >= 70:
             cands.append(("R5 과열 후 첫 장대음봉", max(h_[i - 8:i + 1]) * 1.001))
+        pumped = max(c_[i-8:i+1]) / c_[i-24] - 1 >= 0.03
+        hot = max(d["rsi"][i-4:i+1]) >= 70
+        # R6 급등·과열 후 첫 이탈
+        if pumped and hot and c_[i] < o_[i] and c_[i] < l_[i-1]:
+            cands.append(("R6 급등·과열 후 첫 이탈", max(h_[i-8:i+1]) * 1.001))
+        for nm0, stop0 in list(cands):
+            if nm0.startswith(("R1", "R2")) and pumped: cands.append((nm0 + "+급등", stop0))
         for nm, stop in cands:
             if t - last.get(nm, 0) < 8 * 900: continue
             last[nm] = t; o = short_outcome(d, i, stop)
