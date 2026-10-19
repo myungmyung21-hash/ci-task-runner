@@ -2,13 +2,26 @@ import os, sys, time, json, requests
 from datetime import datetime, timedelta
 import monitor as M
 
-LABEL = {"recl": "투매후회복", "hold": "양봉2회방어", "s1": "1단계눌림", "s1s": "1단계눌림(강)", "s2": "2단계돌파"}
+LABEL = {"recl": "투매후회복", "hold": "양봉2회방어", "s2": "2단계돌파", "short": "short(SAR전환·약세)"}
 
 def fetch_range(kind, sym, start, end):
     rows, a = [], start
     while a < end:
         b = min(a + 900 * M.BAR, end)
         rows += M.candles(kind, sym, a, b); a = b; time.sleep(0.12)
+    return sorted({r[0]: r for r in rows}.values())
+
+def fetch_1h(kind, sym, start, end):
+    rows, a = [], start
+    while a < end:
+        b = min(a + 900 * 3600, end)
+        if kind == "fut":
+            d = M.get("/futures/usdt/candlesticks", contract=sym, interval="1h", **{"from": a, "to": b}) or []
+            rows += [(int(x["t"]), float(x["o"]), float(x["h"]), float(x["l"]), float(x["c"]), float(x.get("sum") or 0)) for x in d]
+        else:
+            d = M.get("/spot/candlesticks", currency_pair=sym, interval="1h", **{"from": a, "to": b}) or []
+            rows += [(int(x[0]), float(x[5]), float(x[3]), float(x[4]), float(x[2]), float(x[1])) for x in d]
+        a = b; time.sleep(0.12)
     return sorted({r[0]: r for r in rows}.values())
 
 def replay(start_t, end_t):
@@ -20,6 +33,7 @@ def replay(start_t, end_t):
     for name, (k, s) in m.items():
         if name == "BTC": continue
         rows = fetch_range(k, s, f0, now); data[name] = rows; state = {}
+        h1 = fetch_1h(k, s, f0 - 70 * 3600, now)
         for i in range(119, len(rows)):
             t = rows[i][0]; ct = t + M.BAR
             if ct < start_t or ct > end_t: continue
@@ -32,6 +46,10 @@ def replay(start_t, end_t):
             def add(key, typ, stop):
                 if t - state.get(key, 0) < 8 * M.BAR: return
                 state[key] = t; alerts.append(dict(name=name, typ=typ, i=i, t=ct, entry=rows[i][4], stop=stop))
+            sh = M.short_sig(d, j, rs)
+            if sh and t - state.get("s", 0) >= 8 * M.BAR:
+                hh = [r for r in h1 if r[0] + 3600 <= ct][-60:]
+                if M.down_1h(hh): add("s", "short", sh["stop"])
             rc = M.recl(d, j)
             if rc: add("r", "recl", rc["low"])
             hd = M.hold2(d, j)
@@ -50,11 +68,19 @@ def replay(start_t, end_t):
         a["up"] = (max(r[2] for r in fut) / e - 1) * 100
         a["dn"] = (min(r[3] for r in fut) / e - 1) * 100
         a["now"] = (fut[-1][4] / e - 1) * 100
-        R = e - a["stop"]; res = "진행"
-        if R > 0:
-            for r in fut:
-                if r[3] <= a["stop"]: res = "손절"; break
-                if r[2] >= e + 2 * R: res = "목표"; break
+        res = "진행"
+        if a["typ"] == "short":
+            R = a["stop"] - e
+            if R > 0:
+                for r in fut:
+                    if r[2] >= a["stop"]: res = "손절"; break
+                    if r[3] <= e - 2 * R: res = "목표"; break
+        else:
+            R = e - a["stop"]
+            if R > 0:
+                for r in fut:
+                    if r[3] <= a["stop"]: res = "손절"; break
+                    if r[2] >= e + 2 * R: res = "목표"; break
         a["res"] = res
         a["dir"] = "하락" if (a["now"] < 0 and -a["dn"] > a["up"]) else "상승"
     return sorted(alerts, key=lambda x: x["t"])
@@ -81,11 +107,16 @@ def noon(alerts):
     done = [a for a in alerts if a.get("up") is not None]
     head = f"[코인 알람 정오 통계] 아침 정리 {len(done)}건 기준(%)"
     lines = []
-    groups = [("전체", done)] + [(LABEL[k], [a for a in done if a["typ"] == k]) for k in LABEL]
+    longs = [a for a in done if a["typ"] != "short"]
+    groups = [("롱 전체", longs)] + [(LABEL[k], [a for a in done if a["typ"] == k]) for k in LABEL if k != "short"]
     for nm, g in groups:
         if not g: continue
         ups = [a["up"] for a in g]; dns = [a["dn"] for a in g]
         lines.append(f"{nm} {len(g)}건 평균최고{sum(ups)/len(ups):+.1f} 최대{max(ups):+.1f} 최소{min(ups):+.1f} 평균최저{sum(dns)/len(dns):+.1f} 목표{sum(a["res"]=="목표" for a in g)} 손절{sum(a["res"]=="손절" for a in g)}")
+    sh = [a for a in done if a["typ"] == "short"]
+    if sh:
+        dns = [a["dn"] for a in sh]; ups = [a["up"] for a in sh]
+        lines.append(f"short {len(sh)}건 평균최저{sum(dns)/len(dns):+.1f} 최대하락{min(dns):+.1f} 최소하락{max(dns):+.1f} 평균역행{sum(ups)/len(ups):+.1f} 목표{sum(a['res']=='목표' for a in sh)} 손절{sum(a['res']=='손절' for a in sh)}")
     if not lines: lines = ["집계할 알람 없음"]
     return chunks(head, lines)
 
