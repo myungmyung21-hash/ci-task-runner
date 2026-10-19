@@ -8,10 +8,10 @@ TOPIC = os.environ.get("NTFY_TOPIC", "")
 WATCH = ["HBAR", "SUI", "ETH", "PEPE", "BTC", "WLD", "SOL", "TSLA", "ADA", "XRP",
          "GOOGL", "DOGE", "SHIB", "ONDO", "SPCX", "TRUMP"]  # KAIA·MBABYDOGE·BRETT 제외(무변동봉 과다)
 BAR = 900
-CODE = {"HBAR": "Hazel", "SUI": "Sunny", "ETH": "Echo", "PEPE": "Pepper", "BTC": "Bravo",
-        "WLD": "Willow", "SOL": "Solar", "TSLA": "Tango", "ADA": "Aurora", "XRP": "Xenon",
-        "GOOGL": "Gamma", "DOGE": "Delta", "SHIB": "Shadow", "ONDO": "Orbit", "SPCX": "Spark",
-        "BRETT": "Berry", "MBABYDOGE": "Mango", "TRUMP": "Tulip", "KAIA": "Kite"}
+CODE = {"HBAR": "한겨레", "SUI": "서울경제", "ETH": "이데일리", "PEPE": "파이낸셜뉴스", "BTC": "매일경제",
+        "WLD": "Washington Post", "SOL": "세계일보", "TSLA": "The Times", "ADA": "아시아경제", "XRP": "Reuters",
+        "GOOGL": "The Guardian", "DOGE": "동아일보", "SHIB": "중앙일보", "ONDO": "오마이뉴스", "SPCX": "조선일보",
+        "TRUMP": "The Telegraph"}
 S = requests.Session()
 S.headers["Accept"] = "application/json"
 
@@ -186,6 +186,8 @@ def recl(d, i, vx=3.0, win=16):
 
 
 def fmt(x):
+    if x and abs(x) < 0.01:
+        return f"{x:.12f}".rstrip("0")[:12]
     return f"{x:.6g}"
 
 
@@ -193,31 +195,30 @@ def message(name, stage, info, t, rs=0.0):
     tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
     cn = CODE.get(name, name)
     if stage == 1:
-        head = "긴급 리뷰 요청" if rs >= 0.02 else "리뷰 요청"
-        title = f"[Coding task] {cn} {head}"
-        body = (f"{tk} 빌드 · 현재값 {fmt(info['price'])}\n"
-                f"기준선 {fmt(info['mb'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
+        title = f"[{'주요 분석' if rs >= 0.02 else '분석'}] {cn}"
+        body = (f"{tk} · 지수 {fmt(info['price'])}\n"
+                f"기준 {fmt(info['mb'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
     else:
-        title = f"[AI 테스트] {cn} 배포 완료"
-        body = (f"{tk} 빌드 · 현재값 {fmt(info['price'])}\n"
-                f"부하 {info['volx']:.1f}x · 상한 {fmt(info['ub'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
+        title = f"[단독] {cn}"
+        body = (f"{tk} · 지수 {fmt(info['price'])}\n"
+                f"거래 {info['volx']*100:.0f}% · 상한 {fmt(info['ub'])} · 하한 {fmt(info['sar'])} · 점수 {rs*100:+.2f}")
     return title, body
 
 
 def message_hold(name, info, t, rs=0.0):
     tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
-    return (f"[News summary] {CODE.get(name, name)} 요약 도착",
-            f"{tk} 업데이트 · 현재값 {fmt(info['price'])}\n기준 {fmt(info['sup'])} · 점수 {rs*100:+.2f}")
+    return (f"[종합] {CODE.get(name, name)}",
+            f"{tk} · 지수 {fmt(info['price'])}\n기준 {fmt(info['sup'])} · 점수 {rs*100:+.2f}")
 
 
 def message_recl(name, info, t, rs, vr):
     tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
-    return (f"[AI 테스트] {CODE.get(name, name)} 복구 완료",
-            f"{tk} 빌드 · 현재값 {fmt(info['price'])}\n복구기준 {fmt(info['lvl'])} · 하한 {fmt(info['low'])} · "
-            f"장애부하 {info['cvx']*100:.0f}% · 부하 {vr*100:.0f}% · 점수 {rs*100:+.2f}")
+    return (f"[속보] {CODE.get(name, name)}",
+            f"{tk} · 지수 {fmt(info['price'])}\n기준 {fmt(info['lvl'])} · 하한 {fmt(info['low'])} · "
+            f"투매거래 {info['cvx']*100:.0f}% · 거래 {vr*100:.0f}% · 점수 {rs*100:+.2f}")
 
 
-def notify(title, body, prio=4, tag="robot"):
+def notify(title, body, prio=4, tag="newspaper"):
     if not TOPIC:
         print("[no topic]", title, body); return
     try:
@@ -270,7 +271,7 @@ def live(hours=5.75):
     try: state = json.load(open(stfile))
     except Exception: state = {}
     if os.environ.get("EVENT") == "workflow_dispatch":
-        notify("[News summary] 구독 시작", f"{len(m)}개 채널 요약을 15분마다 확인합니다" + (f"\n미연결: {len(miss)}개" if miss else ""), 3, "newspaper")
+        notify("[알림] 뉴스 구독 시작", f"{len(m)}개 언론사 알림을 받습니다" + (f"\n미연결: {len(miss)}개" if miss else ""), 3, "newspaper")
     order = ["BTC"] + [n for n in m if n != "BTC"]
     stop = time.time() + hours * 3600
     while time.time() < stop:
@@ -291,13 +292,13 @@ def live(hours=5.75):
             if rc and btc_ret is not None and rows[i][0] - state.get(f"{name}:r", 0) >= 8 * BAR:
                 state[f"{name}:r"] = rows[i][0]
                 title, body = message_recl(name, rc, rows[i][0], ret - btc_ret, vr)
-                notify(title, body, 5, "wrench")
+                notify(title, body, 5, "newspaper")
                 print("ALERT", title, body.replace("\n", " | "))
             hd = hold2(d, i)
             if hd and vr >= 1.5 and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
                 state[f"{name}:h"] = rows[i][0]
                 title, body = message_hold(name, hd, rows[i][0], ret - btc_ret)
-                body += f" · 부하 {vr*100:.0f}%"
+                body += f" · 거래 {vr*100:.0f}%"
                 notify(title, body, 4, "newspaper")
                 print("ALERT", title, body.replace("\n", " | "))
             sig = detect(d, i)
@@ -312,8 +313,8 @@ def live(hours=5.75):
             if t - state.get(key, 0) < 8 * BAR: continue
             state[key] = t
             title, body = message(name, st, info, t, rs)
-            if st == 1: body += f" · 부하 {vratio(d, i)*100:.0f}%"
-            notify(title, body, 5 if (st == 1 and rs >= 0.02) else 4, "computer" if st == 1 else "robot")
+            if st == 1: body += f" · 거래 {vratio(d, i)*100:.0f}%"
+            notify(title, body, 5 if (st == 1 and rs >= 0.02) else 4, "newspaper")
             print("ALERT", title, body.replace("\n", " | "))
         json.dump(state, open(stfile, "w"))
     json.dump(state, open(stfile, "w"))
@@ -323,6 +324,6 @@ if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "live"
     if mode == "backtest":
         backtest(int(sys.argv[2]) if len(sys.argv) > 2 else 30)
-        notify("[AI 테스트] 연결 확인", "테스트 환경 연결이 정상입니다.", 3, "white_check_mark")
+        notify("[알림] 연결 확인", "뉴스 알림 연결이 정상입니다.", 3, "newspaper")
     else:
         live()
