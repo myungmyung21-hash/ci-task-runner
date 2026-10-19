@@ -185,6 +185,31 @@ def recl(d, i, vx=3.0, win=16):
     return None
 
 
+def candles_1h(kind, sym, limit=60):
+    if kind == "fut":
+        d = get("/futures/usdt/candlesticks", contract=sym, interval="1h", limit=limit) or []
+        rows = [(int(x["t"]), float(x["o"]), float(x["h"]), float(x["l"]), float(x["c"]), float(x.get("sum") or x.get("v") or 0)) for x in d]
+    else:
+        d = get("/spot/candlesticks", currency_pair=sym, interval="1h", limit=limit) or []
+        rows = [(int(x[0]), float(x[5]), float(x[3]), float(x[4]), float(x[2]), float(x[1])) for x in d]
+    now = time.time()
+    return [r for r in sorted({r[0]: r for r in rows}.values()) if r[0] + 3600 <= now]
+
+
+def short_sig(d, i, rs):
+    """15분봉 SAR 하락 전환 + BTC 대비 약세 + 중심선 아래 (1시간 하락추세는 따로 확인)"""
+    if i < 2 or d["mb"][i] is None: return None
+    if d["up"][i - 1] and not d["up"][i] and rs <= -0.005 and d["c"][i] < d["mb"][i]:
+        return dict(price=d["c"][i], stop=d["sar"][i])
+    return None
+
+
+def down_1h(rows1h):
+    if len(rows1h) < 30: return False
+    h = indicators(rows1h); j = len(rows1h) - 1
+    return (not h["up"][j]) and h["mb"][j] is not None and h["c"][j] < h["mb"][j]
+
+
 def fmt(x):
     if x and abs(x) < 0.01:
         return f"{x:.12f}".rstrip("0")[:12]
@@ -208,11 +233,11 @@ def message_recl(name, info, t, rs, vr):
     return f"[속보] {CODE.get(name, name)}", "속보가 들어왔습니다."
 
 
-def notify(title, body, prio=4, tag="newspaper"):
+def notify(title, body, prio=4, tag="newspaper", topic=None):
     if not TOPIC:
         print("[no topic]", title, body); return
     try:
-        S.post("https://ntfy.sh/", json={"topic": TOPIC, "title": title, "message": body,
+        S.post("https://ntfy.sh/", json={"topic": topic or TOPIC, "title": title, "message": body,
                                          "priority": prio, "tags": [tag]}, timeout=10)
     except Exception as e:
         print("ntfy fail", e)
@@ -284,6 +309,12 @@ def live(hours=5.75):
                 title, body = message_recl(name, rc, rows[i][0], ret - btc_ret, vr)
                 notify(title, body, 5, "newspaper")
                 print("ALERT", title, body.replace("\n", " | "))
+            sh = short_sig(d, i, ret - btc_ret) if btc_ret is not None else None
+            if sh and rows[i][0] - state.get(f"{name}:s", 0) >= 8 * BAR and down_1h(candles_1h(kind, sym)):
+                state[f"{name}:s"] = rows[i][0]
+                title = f"short [해설] {CODE.get(name, name)}"
+                notify(title, "해설 기사가 올라왔습니다.", 4, "newspaper", TOPIC + "-s")
+                print("ALERT", title)
             hd = hold2(d, i)
             if hd and vr >= 1.5 and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
                 state[f"{name}:h"] = rows[i][0]
