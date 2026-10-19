@@ -40,8 +40,7 @@ def replay(start_t, end_t):
             if not sig: continue
             st, info = sig
             if st == 1:
-                if rs < 0.01: continue
-                add("1", "s1s" if rs >= 0.02 else "s1", info["sar"])
+                continue
             else:
                 if not any((M.detect(d, q) or (0,))[0] == 1 for q in range(j - 12, j)): continue
                 add("2", "s2", info["sar"])
