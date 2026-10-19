@@ -2,7 +2,7 @@ import os, sys, time, json, requests
 from datetime import datetime, timedelta
 import monitor as M
 
-LABEL = {"recl": "투매후회복", "s2": "2단계돌파", "s2s": "2단계돌파(강:밴드폭4%+·RSI70+)", "short": "short(SAR전환·약세)"}
+LABEL = {"s2": "2단계돌파", "s2s": "2단계돌파(강:밴드폭4%+·RSI70+)", "short": "short(SAR전환·약세)"}
 
 def fetch_range(kind, sym, start, end):
     rows, a = [], start
@@ -51,7 +51,7 @@ def replay(start_t, end_t):
                 hh = [r for r in h1 if r[0] + 3600 <= ct][-60:]
                 if M.down_1h(hh): add("s", "short", sh["stop"])
             rc = M.recl(d, j)
-            if rc: add("r", "recl", rc["low"])
+            # [속보] 투매후회복 중지
             hd = M.hold2(d, j)
             # 양봉2회방어 알람 중지(300일 검증 손실)
             sig = M.detect(d, j)
