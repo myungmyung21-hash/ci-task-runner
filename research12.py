@@ -24,14 +24,6 @@ def feats(d,h,i,sup):
                 ret4h=(c/d["c"][i-16]-1)*100, mbdist=(c-mb)/a if a else 0, true_low=sup<=min(d["l"][i-24:i+1])*1.001,
                 h1_down=(j>0 and (not h["up"][j]) and h["c"][j]<h["mb"][j]), h1_up=(j>0 and h["up"][j] and h["c"][j]>h["mb"][j]),
                 sar_up=d["up"][i])
-# A. TRUMP 오늘
-d,h=data["TRUMP"]
-print("TRUMP 10/19 09:00~13:15 (봉시작 KST | 종가 | 거래% | RSI | %B | MACD히스토 | hold2 | 1h추세)")
-for i in range(len(d["t"])):
-    t=datetime.fromtimestamp(d["t"][i],M.KST)
-    if t.strftime("%m/%d")=="10/19" and 9<=t.hour<=13:
-        hd=M.hold2(d,i); f=feats(d,h,i,hd["sup"] if hd else d["l"][i])
-        print(f" {t:%H:%M} | {d['c'][i]:.3f} | {M.vratio(d,i)*100:.0f}% | {d['rsi'][i]:.0f} | {f['pctb']:.2f} | {d['hist'][i]:+.4f} | {'Y(기준 %.3f)'%hd['sup'] if hd else '-'} | {'하락' if f['h1_down'] else ('상승' if f['h1_up'] else '중립')}")
 # B. 양봉2회방어 학습
 ev=[]
 for name,(d,h) in data.items():
@@ -43,7 +35,7 @@ for name,(d,h) in data.items():
         last=d["t"][i]; o=outcome(d,i,hd["sup"]*0.999)
         if o is None: continue
         ev.append((d["t"][i],o,feats(d,h,i,hd["sup"]),name))
-ev.sort(); cut=ev[int(len(ev)*0.7)][0]
+ev.sort(key=lambda x:x[0]); cut=ev[int(len(ev)*0.7)][0]
 def show(nm,sel):
     a=[o for t,o,f,n in ev if sel(f) and t<cut]; b=[o for t,o,f,n in ev if sel(f) and t>=cut]
     fa=lambda z:f"n={len(z)} R={sum(z)/len(z):+.3f}" if z else "n=0"
