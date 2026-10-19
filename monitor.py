@@ -210,6 +210,13 @@ def down_1h(rows1h):
     return (not h["up"][j]) and h["mb"][j] is not None and h["c"][j] < h["mb"][j]
 
 
+def hold_ok(d, i):
+    """양봉2회방어 필터: 볼린저 하단 절반(%B 0.5 이하) + MACD 히스토그램 3봉 전보다 상승"""
+    ub, lb = d["ub"][i], d["lb"][i]
+    if ub is None or ub <= lb: return False
+    return (d["c"][i] - lb) / (ub - lb) <= 0.5 and d["hist"][i] > d["hist"][i - 3]
+
+
 def fmt(x):
     if x and abs(x) < 0.01:
         return f"{x:.12f}".rstrip("0")[:12]
@@ -316,7 +323,7 @@ def live(hours=5.75):
                 notify(title, "해설 기사가 올라왔습니다.", 4, "newspaper", TOPIC + "-s")
                 print("ALERT", title)
             hd = hold2(d, i)
-            if hd and vr >= 1.5 and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
+            if hd and vr >= 1.5 and hold_ok(d, i) and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
                 state[f"{name}:h"] = rows[i][0]
                 title, body = message_hold(name, hd, rows[i][0], ret - btc_ret)
                 notify(title, body, 4, "newspaper")
