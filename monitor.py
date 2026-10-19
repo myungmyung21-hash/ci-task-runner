@@ -296,7 +296,7 @@ def live(hours=5.75):
             rs = ret - btc_ret
             if st == 1:
                 state[f"{name}:s1seen"] = t
-                if rs < 0.01: continue
+                continue  # 1단계 눌림 알람 중지(60일 검증 하위)
             if st == 2 and not any((detect(d, j) or (0,))[0] == 1 for j in range(i - 12, i)): continue
             key = f"{name}:{st}"
             if t - state.get(key, 0) < 8 * BAR: continue
