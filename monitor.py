@@ -164,6 +164,27 @@ def hold2(d, i, win=16):
     return None
 
 
+def vratio(d, i, n=20):
+    a = sum(d["v"][i - n:i]) / n
+    return d["v"][i] / a if a > 0 else 0
+
+
+def recl(d, i, vx=3.0, win=16):
+    """투매(20봉평균 거래대금 vx배 이상 음봉이 하단밴드 이탈) 후 바닥, 투매 첫 음봉 시가를 양봉 종가로 회복"""
+    o, l, c = d["o"], d["l"], d["c"]
+    if i < win + 25 or not c[i] > o[i]: return None
+    for k in range(i - 2, i - win - 1, -1):
+        if not (c[k] < o[k] and vratio(d, k) >= vx and l[k] <= d["lb"][k]): continue
+        ks = [j for j in (k - 1, k, k + 1) if c[j] < o[j] and vratio(d, j) >= vx * 0.66]
+        lvl = max(o[j] for j in ks)
+        a = atr(d, i); base = min(l[k - 1:min(k + 2, i) + 1])
+        if min(l[k:i + 1]) < base - 0.5 * a: return None
+        if c[i] > lvl and c[i - 1] <= lvl:
+            return dict(price=c[i], lvl=lvl, low=min(l[k - 1:i + 1]), cvx=vratio(d, k))
+        return None
+    return None
+
+
 def fmt(x):
     return f"{x:.6g}"
 
@@ -187,6 +208,13 @@ def message_hold(name, info, t, rs=0.0):
     tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
     return (f"[News summary] {CODE.get(name, name)} 요약 도착",
             f"{tk} 업데이트 · 현재값 {fmt(info['price'])}\n기준 {fmt(info['sup'])} · 점수 {rs*100:+.2f}")
+
+
+def message_recl(name, info, t, rs, vr):
+    tk = datetime.fromtimestamp(t + BAR, KST).strftime("%H:%M")
+    return (f"[AI 테스트] {CODE.get(name, name)} 복구 완료",
+            f"{tk} 빌드 · 현재값 {fmt(info['price'])}\n복구기준 {fmt(info['lvl'])} · 하한 {fmt(info['low'])} · "
+            f"장애부하 {info['cvx']*100:.0f}% · 부하 {vr*100:.0f}% · 점수 {rs*100:+.2f}")
 
 
 def notify(title, body, prio=4, tag="robot"):
@@ -258,10 +286,18 @@ def live(hours=5.75):
             if name == "BTC":
                 btc_ret = ret; continue
             d = indicators(rows); i = len(rows) - 1
+            vr = vratio(d, i)
+            rc = recl(d, i)
+            if rc and btc_ret is not None and rows[i][0] - state.get(f"{name}:r", 0) >= 8 * BAR:
+                state[f"{name}:r"] = rows[i][0]
+                title, body = message_recl(name, rc, rows[i][0], ret - btc_ret, vr)
+                notify(title, body, 5, "wrench")
+                print("ALERT", title, body.replace("\n", " | "))
             hd = hold2(d, i)
-            if hd and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
+            if hd and vr >= 1.5 and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
                 state[f"{name}:h"] = rows[i][0]
                 title, body = message_hold(name, hd, rows[i][0], ret - btc_ret)
+                body += f" · 부하 {vr*100:.0f}%"
                 notify(title, body, 4, "newspaper")
                 print("ALERT", title, body.replace("\n", " | "))
             sig = detect(d, i)
@@ -276,6 +312,7 @@ def live(hours=5.75):
             if t - state.get(key, 0) < 8 * BAR: continue
             state[key] = t
             title, body = message(name, st, info, t, rs)
+            if st == 1: body += f" · 부하 {vratio(d, i)*100:.0f}%"
             notify(title, body, 5 if (st == 1 and rs >= 0.02) else 4, "computer" if st == 1 else "robot")
             print("ALERT", title, body.replace("\n", " | "))
         json.dump(state, open(stfile, "w"))
