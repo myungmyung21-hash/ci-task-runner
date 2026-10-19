@@ -1,7 +1,6 @@
 import time
 import monitor as M
 from research6 import fetch
-M.WATCH=[w for w in M.WATCH if w not in ("KAIA","MBABYDOGE","BRETT")]
 def outcome(d,i,stop,H=16):
     e=d["c"][i]; R=e-stop
     if R<=0 or R/e>0.06: return None
@@ -10,7 +9,9 @@ def outcome(d,i,stop,H=16):
         if d["h"][k]>=e+2*R: return 2.0
     return max(-1.0,min(2.0,(d["c"][i+H]-e)/R))
 m,_=M.resolve(); data={}
-for name,(k,s) in m.items(): rows=fetch(k,s,"15m",60); data[name]=(rows,M.indicators(rows))
+for name,(k,s) in m.items():
+    if name in ("KAIA","MBABYDOGE","BRETT"): continue
+    rows=fetch(k,s,"15m",60); data[name]=(rows,M.indicators(rows))
 btc=data["BTC"][1]; bidx={r[0]:i for i,r in enumerate(data["BTC"][0])}
 res={}
 for name,(rows,d) in data.items():
@@ -23,9 +24,8 @@ for name,(rows,d) in data.items():
         sig=M.detect(d,i)
         if sig and sig[0]==1: s1[i]=True
         cands=[]
-        if sig and sig[0]==1 and rs is not None and rs>=0.01: cands.append(("1단계 눌림(RS1%)",d["sar"][i]))
-        if sig and sig[0]==1 and rs is not None and 0.01<=rs<0.02: cands.append(("1단계 일반(RS1~2%)",d["sar"][i]))
-        if sig and sig[0]==1 and rs is not None and rs>=0.02: cands.append(("1단계 강(RS2%+)",d["sar"][i]))
+        if sig and sig[0]==1 and rs is not None and 0.01<=rs<0.02: cands.append(("1단계 눌림(일반)",d["sar"][i]))
+        if sig and sig[0]==1 and rs is not None and rs>=0.02: cands.append(("1단계 눌림(강)",d["sar"][i]))
         if sig and sig[0]==2 and any(s1[i-12:i]): cands.append(("2단계 돌파(1단계 선행)",d["sar"][i]))
         hd=M.hold2(d,i)
         if hd and M.vratio(d,i)>=1.5: cands.append(("양봉2회방어(부하150%+)",hd["sup"]))
