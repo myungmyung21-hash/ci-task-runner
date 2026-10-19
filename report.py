@@ -2,7 +2,7 @@ import os, sys, time, json, requests
 from datetime import datetime, timedelta
 import monitor as M
 
-LABEL = {"recl": "속보", "hold": "종합", "s1": "분석", "s1s": "주요 분석", "s2": "단독"}
+LABEL = {"recl": "투매후회복", "hold": "양봉2회방어", "s1": "1단계눌림", "s1s": "1단계눌림(강)", "s2": "2단계돌파"}
 
 def fetch_range(kind, sym, start, end):
     rows, a = [], start
@@ -54,8 +54,8 @@ def replay(start_t, end_t):
         R = e - a["stop"]; res = "진행"
         if R > 0:
             for r in fut:
-                if r[3] <= a["stop"]: res = "이탈"; break
-                if r[2] >= e + 2 * R: res = "도달"; break
+                if r[3] <= a["stop"]: res = "손절"; break
+                if r[2] >= e + 2 * R: res = "목표"; break
         a["res"] = res
         a["dir"] = "하락" if (a["now"] < 0 and -a["dn"] > a["up"]) else "상승"
     return sorted(alerts, key=lambda x: x["t"])
@@ -70,23 +70,23 @@ def chunks(head, lines, lim=195):
 
 def morning(alerts):
     done = [a for a in alerts if a.get("up") is not None]
-    head = f"[아침 정리] 지난 24시간 {len(done)}건"
+    head = f"[코인 알람 아침 정리] 지난 24시간 {len(done)}건"
     lines = []
     for a in done:
         tk = datetime.fromtimestamp(a["t"], M.KST).strftime("%H:%M")
-        lines.append(f"{tk} {LABEL[a['typ']]} {M.CODE.get(a['name'], a['name'])} 최고{a['up']:+.1f} 최저{a['dn']:+.1f} 현재{a['now']:+.1f} {a['res']}·{a['dir']}")
+        lines.append(f"{tk} {a['name']} {LABEL[a['typ']]} 진입{M.fmt(a['entry'])} 최고{a['up']:+.1f}% 최저{a['dn']:+.1f}% 현재{a['now']:+.1f}% {a['res']}·{a['dir']}")
     if not lines: lines = ["해당 시간대 알람 없음"]
     return chunks(head, lines)
 
 def noon(alerts):
     done = [a for a in alerts if a.get("up") is not None]
-    head = f"[정오 통계] 아침 정리 {len(done)}건 기준(단위 %)"
+    head = f"[코인 알람 정오 통계] 아침 정리 {len(done)}건 기준(%)"
     lines = []
     groups = [("전체", done)] + [(LABEL[k], [a for a in done if a["typ"] == k]) for k in LABEL]
     for nm, g in groups:
         if not g: continue
         ups = [a["up"] for a in g]; dns = [a["dn"] for a in g]
-        lines.append(f"{nm} {len(g)}건 평균최고{sum(ups)/len(ups):+.1f} 최대{max(ups):+.1f} 최소{min(ups):+.1f} 평균최저{sum(dns)/len(dns):+.1f} 도달{sum(a["res"]=="도달" for a in g)} 이탈{sum(a["res"]=="이탈" for a in g)}")
+        lines.append(f"{nm} {len(g)}건 평균최고{sum(ups)/len(ups):+.1f} 최대{max(ups):+.1f} 최소{min(ups):+.1f} 평균최저{sum(dns)/len(dns):+.1f} 목표{sum(a["res"]=="목표" for a in g)} 손절{sum(a["res"]=="손절" for a in g)}")
     if not lines: lines = ["집계할 알람 없음"]
     return chunks(head, lines)
 
