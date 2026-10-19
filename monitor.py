@@ -326,7 +326,7 @@ def live(hours=5.75):
             d = indicators(rows); i = len(rows) - 1
             vr = vratio(d, i)
             rc = recl(d, i)
-            if rc and btc_ret is not None and rows[i][0] - state.get(f"{name}:r", 0) >= 8 * BAR:
+            if False and rc and btc_ret is not None and rows[i][0] - state.get(f"{name}:r", 0) >= 8 * BAR:  # [속보] 중지(사용자 요청)
                 state[f"{name}:r"] = rows[i][0]
                 title, body = message_recl(name, rc, rows[i][0], ret - btc_ret, vr)
                 notify(title, body, 5, "newspaper")
