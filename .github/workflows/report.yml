@@ -1,0 +1,37 @@
+name: report
+on:
+  schedule:
+    - cron: "50 22 * * *"
+    - cron: "55 2 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        default: "morning"
+      dry:
+        default: "no"
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests pynacl
+      - name: report
+        env:
+          KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
+          KAKAO_SECRET: ${{ secrets.KAKAO_SECRET }}
+          KAKAO_REFRESH: ${{ secrets.KAKAO_REFRESH }}
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ]; then if [ "$(date -u +%H)" = "22" ] || [ "$(date -u +%H)" = "23" ]; then MODE=morning; else MODE=noon; fi; fi
+          if [ "${{ github.event.inputs.dry }}" = "yes" ]; then python report.py $MODE --dry; else python report.py $MODE; fi
+      - name: save dry output
+        if: github.event.inputs.dry == 'yes'
+        run: |
+          git config user.name bot && git config user.email bot@users.noreply.github.com
+          git add report_out.txt && git commit -m "out" && git pull --rebase && git push
