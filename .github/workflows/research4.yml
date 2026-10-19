@@ -1,0 +1,21 @@
+name: research4
+on:
+  workflow_dispatch:
+    inputs:
+      sym:
+        default: "PEPE"
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python research4.py 2>&1 | tee r4.txt
+      - run: |
+          git config user.name bot && git config user.email bot@users.noreply.github.com
+          git add r4.txt && git commit -m "diag" && git pull --rebase && git push
