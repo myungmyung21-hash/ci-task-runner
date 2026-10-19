@@ -323,7 +323,7 @@ def live(hours=5.75):
                 notify(title, "해설 기사가 올라왔습니다.", 4, "newspaper", TOPIC + "-s")
                 print("ALERT", title)
             hd = hold2(d, i)
-            if hd and vr >= 1.5 and hold_ok(d, i) and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
+            if False and hd and vr >= 1.5 and hold_ok(d, i) and btc_ret is not None and rows[i][0] - state.get(f"{name}:h", 0) >= 8 * BAR:
                 state[f"{name}:h"] = rows[i][0]
                 title, body = message_hold(name, hd, rows[i][0], ret - btc_ret)
                 notify(title, body, 4, "newspaper")
