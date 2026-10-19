@@ -217,6 +217,21 @@ def hold_ok(d, i):
     return (d["c"][i] - lb) / (ub - lb) <= 0.5 and d["hist"][i] > d["hist"][i - 3]
 
 
+def rsi_last(c, n=14):
+    g = l = 0.0
+    for i in range(1, len(c)):
+        ch = c[i] - c[i - 1]; up, dn = max(ch, 0), max(-ch, 0)
+        if i <= n: g += up / n; l += dn / n
+        else: g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n
+    return 100 - 100 / (1 + g / l) if l > 0 else 100
+
+
+def strong_s2(d, i):
+    """[1면 단독]: 2단계 돌파 중 밴드폭 4% 이상 또는 RSI 70 이상"""
+    bw = (d["ub"][i] - d["lb"][i]) / d["mb"][i] * 100 if d["mb"][i] else 0
+    return bw >= 4 or rsi_last(d["c"][:i + 1]) >= 70
+
+
 def fmt(x):
     if x and abs(x) < 0.01:
         return f"{x:.12f}".rstrip("0")[:12]
@@ -340,7 +355,10 @@ def live(hours=5.75):
             if t - state.get(key, 0) < 8 * BAR: continue
             state[key] = t
             title, body = message(name, st, info, t, rs)
-            notify(title, body, 5 if (st == 1 and rs >= 0.02) else 4, "newspaper")
+            prio = 4
+            if st == 2 and strong_s2(d, i):
+                title, body, prio = f"[1면 단독] {CODE.get(name, name)}", "1면 단독 기사가 올라왔습니다.", 5
+            notify(title, body, prio, "newspaper")
             print("ALERT", title, body.replace("\n", " | "))
         json.dump(state, open(stfile, "w"))
     json.dump(state, open(stfile, "w"))
