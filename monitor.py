@@ -6,7 +6,7 @@ API = "https://api.gateio.ws/api/v4"
 KST = timezone(timedelta(hours=9))
 TOPIC = os.environ.get("NTFY_TOPIC", "")
 WATCH = ["HBAR", "SUI", "ETH", "PEPE", "BTC", "WLD", "SOL", "TSLA", "ADA", "XRP",
-         "GOOGL", "DOGE", "SHIB", "ONDO", "SPCX", "BRETT", "MBABYDOGE", "TRUMP", "KAIA"]
+         "GOOGL", "DOGE", "SHIB", "ONDO", "SPCX", "TRUMP"]  # KAIA·MBABYDOGE·BRETT 제외(무변동봉 과다)
 BAR = 900
 CODE = {"HBAR": "Hazel", "SUI": "Sunny", "ETH": "Echo", "PEPE": "Pepper", "BTC": "Bravo",
         "WLD": "Willow", "SOL": "Solar", "TSLA": "Tango", "ADA": "Aurora", "XRP": "Xenon",
