@@ -53,7 +53,7 @@ def replay(start_t, end_t):
             rc = M.recl(d, j)
             if rc: add("r", "recl", rc["low"])
             hd = M.hold2(d, j)
-            if hd and vr >= 1.5 and M.hold_ok(d, j): add("h", "hold", hd["sup"])
+            # 양봉2회방어 알람 중지(300일 검증 손실)
             sig = M.detect(d, j)
             if not sig: continue
             st, info = sig
