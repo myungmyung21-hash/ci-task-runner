@@ -2,7 +2,7 @@ import os, sys, time, json, requests
 from datetime import datetime, timedelta
 import monitor as M
 
-LABEL = {"s2": "2단계돌파", "s2s": "2단계돌파(강:밴드폭4%+·RSI70+)", "short": "short(SAR전환·약세)"}
+LABEL = {"s2": "2단계돌파", "s2s": "2단계돌파(강:15분RSI70+·1시간RSI65+)", "short": "short(SAR전환·약세)"}
 
 def fetch_range(kind, sym, start, end):
     rows, a = [], start
@@ -61,7 +61,8 @@ def replay(start_t, end_t):
                 continue
             else:
                 if not any((M.detect(d, q) or (0,))[0] == 1 for q in range(j - 12, j)): continue
-                add("2", "s2s" if M.strong_s2(d, j) else "s2", info["sar"])
+                g2 = M.s2_grade(d, j, [r for r in h1 if r[0] + 3600 <= ct][-100:])
+                if g2: add("2", "s2s" if g2 == "strong" else "s2", info["sar"])
     for a in alerts:
         rows = data[a["name"]]; fut = rows[a["i"] + 1:]; e = a["entry"]
         if not fut: a.update(up=None); continue
