@@ -226,6 +226,15 @@ def rsi_last(c, n=14):
     return 100 - 100 / (1 + g / l) if l > 0 else 100
 
 
+def s2_grade(d, i, rows1h):
+    """2단계 돌파 등급: 1시간봉 중심선 아래면 None(알림 안 함), 15분 RSI 70+ & 1시간 RSI 65+면 strong, 그 외 normal"""
+    if len(rows1h) < 30: return "normal"
+    h = indicators(rows1h); j = len(rows1h) - 1
+    if h["mb"][j] is None or h["c"][j] <= h["mb"][j]: return None
+    if rsi_last(d["c"][:i + 1]) >= 70 and rsi_last(h["c"]) >= 65: return "strong"
+    return "normal"
+
+
 def strong_s2(d, i):
     """[1면 단독]: 2단계 돌파 중 밴드폭 4% 이상 또는 RSI 70 이상"""
     bw = (d["ub"][i] - d["lb"][i]) / d["mb"][i] * 100 if d["mb"][i] else 0
@@ -353,10 +362,12 @@ def live(hours=5.75):
             if st == 2 and not any((detect(d, j) or (0,))[0] == 1 for j in range(i - 12, i)): continue
             key = f"{name}:{st}"
             if t - state.get(key, 0) < 8 * BAR: continue
+            grade = s2_grade(d, i, candles_1h(kind, sym, 100)) if st == 2 else None
+            if st == 2 and grade is None: continue
             state[key] = t
             title, body = message(name, st, info, t, rs)
             prio = 4
-            if st == 2 and strong_s2(d, i):
+            if grade == "strong":
                 title, body, prio = f"[1면 단독] {CODE.get(name, name)}", "1면 단독 기사가 올라왔습니다.", 5
             notify(title, body, prio, "newspaper")
             print("ALERT", title, body.replace("\n", " | "))
