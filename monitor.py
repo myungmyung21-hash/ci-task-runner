@@ -209,7 +209,7 @@ def short4h_sig(rows4):
     return dict(price=d["c"][i], stop=d["sar"][i], t=rows4[i][0])
 
 
-MTF = [("15분", 900, 20, 4), ("1시간", 3600, 20, 4), ("4시간", 14400, 20, 2), ("일봉", 86400, 10, 1)]  # (이름, 초, 직전 유지 봉수, 전환 후 유효 봉수)
+MTF = [("15분", 900, 20, 16), ("1시간", 3600, 20, 12), ("4시간", 14400, 20, 6), ("일봉", 86400, 10, 3)]  # (이름, 초, 직전 유지 봉수, 전환 후 유효 봉수)
 
 
 def agg_closed(rows, sec, now=None):
@@ -240,6 +240,11 @@ def mtf_count(flips_by_tf, T):
         recent = [x for x in fl if T - fresh * sec < x[0] <= T]
         if recent: cnt[recent[-1][1]].append(nm)
     return cnt
+
+
+def mtf_flips(rows15, rows1h, rows1d, now=None):
+    now = now or time.time(); tf = [rows15, rows1h, agg_closed(rows1h, 14400, now), rows1d]
+    return [sar_flips(r, sec, need) for r, (nm, sec, need, fr) in zip(tf, MTF)]
 
 
 def candles_1d(kind, sym, limit=80):
@@ -388,7 +393,7 @@ def live(hours=5.75):
         notify("[알림] 뉴스 구독 시작", "구독한 언론사 기사를 알려드립니다.", 3, "newspaper")
     order = ["BTC"] + [n for n in m if n != "BTC"]
     stop = time.time() + hours * 3600
-    last4h = None
+    last4h = None; c1h = {}; c1d = {}
     while time.time() < stop:
         nxt = (int(time.time()) // BAR + 1) * BAR + 8
         time.sleep(max(1, nxt - time.time()))
@@ -404,6 +409,19 @@ def live(hours=5.75):
                     print("ALERT short4h", name)
             rows = candles(kind, sym, limit=120)
             if len(rows) < 60: continue
+            if name != "BTC":
+                hs, ds = int(time.time()) // 3600, int(time.time()) // 86400
+                if c1h.get(name, (None,))[0] != hs: c1h[name] = (hs, candles_1h(kind, sym, 400))
+                if c1d.get(name, (None,))[0] != ds: c1d[name] = (ds, candles_1d(kind, sym, 80))
+                cnt = mtf_count(mtf_flips(rows, c1h[name][1], c1d[name][1]), rows[-1][0] + BAR)
+                for dirn in (1, -1):
+                    k = len(cnt[dirn]); key = f"{name}:mtf{dirn}"
+                    if k > state.get(key, 0):
+                        lv = 5 - k; cn = CODE.get(name, name); pr = 5 if k >= 3 else (4 if k == 2 else 3)
+                        if dirn == 1: notify(f"0-{lv}위 [특집] {cn}", "특집 기사가 올라왔습니다.", pr, "newspaper")
+                        else: notify(f"0-{lv}위 short [특집] {cn}", "특집 기사가 올라왔습니다.", pr, "newspaper", TOPIC + "-s")
+                        print("ALERT mtf", name, dirn, k, cnt[dirn])
+                    state[key] = k
             c = [r[4] for r in rows]
             ret = c[-1] / c[-17] - 1
             if name == "BTC":
