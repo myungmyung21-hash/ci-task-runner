@@ -424,6 +424,13 @@ def live(hours=5.75):
             kind, sym = m[name]
             rows = candles(kind, sym, limit=120)
             if len(rows) < 60: continue
+            if name == "WLD" and not state.get("oneshot:WLD"):  # 단건: WLD 15분 SAR 롱 전환 1회만
+                dw = indicators(rows); q = len(rows) - 1
+                if (not dw["up"][q - 1]) and dw["up"][q]:
+                    state["oneshot:WLD"] = rows[q][0]
+                    notify(f"[호외] {CODE.get('WLD', 'WLD')}", "호외가 나왔습니다.", 5, "newspaper")
+                    print("ALERT oneshot WLD")
+                    json.dump(state, open(stfile, "w"))
             if name != "BTC":
                 hs, ds = int(time.time()) // 3600, int(time.time()) // 86400
                 if c1h.get(name, (None,))[0] != hs: c1h[name] = (hs, candles_1h(kind, sym, 400))
