@@ -2,7 +2,9 @@ import os, sys, time, json, requests
 from datetime import datetime, timedelta
 import monitor as M
 
-LABEL = {"s2": "2단계돌파", "s2s": "2단계돌파(강:15분RSI70+·1시간RSI65+)", "short": "short(SAR전환·약세)", "short4h": "short 4시간전환(20봉+·5%+)"}
+LABEL = {"s2": "2단계돌파", "s2s": "2단계돌파(강:15분RSI70+·1시간RSI65+)", "short": "short(SAR전환·약세)", "short4h": "short 4시간전환(20봉+·5%+)",
+         "mtf1": "0-1위 특집(4개 전환)", "mtf2": "0-2위 특집(3개)", "mtf3": "0-3위 특집(2개)", "mtf4": "0-4위 특집(1개)",
+         "short_mtf1": "0-1위 short 특집(4개)", "short_mtf2": "0-2위 short 특집(3개)", "short_mtf3": "0-3위 short 특집(2개)", "short_mtf4": "0-4위 short 특집(1개)"}
 
 def fetch_range(kind, sym, start, end):
     rows, a = [], start
@@ -33,7 +35,18 @@ def replay(start_t, end_t):
     for name, (k, s) in m.items():
         if name == "BTC": continue
         rows = fetch_range(k, s, f0, now); data[name] = rows; state = {}
-        h1 = fetch_1h(k, s, f0 - 400 * 3600, now)
+        h1 = fetch_1h(k, s, f0 - 900 * 3600, now)
+        fl = M.mtf_flips(rows, h1, M.agg_closed(h1, 86400, now), now); prevk = {1: 0, -1: 0}
+        for q in range(len(rows)):
+            ctq = rows[q][0] + 900
+            if ctq < start_t or ctq > end_t: continue
+            cnt = M.mtf_count(fl, ctq)
+            for dirn in (1, -1):
+                kk = len(cnt[dirn])
+                if kk > prevk[dirn]:
+                    lvq = 5 - kk; stop_ = min(r[3] for r in rows[max(0, q - 4):q + 1]) if dirn == 1 else max(r[2] for r in rows[max(0, q - 4):q + 1])
+                    alerts.append(dict(name=name, typ=("short_mtf" if dirn == -1 else "mtf") + str(lvq), i=q, t=ctq, entry=rows[q][4], stop=stop_))
+                prevk[dirn] = kk
         r4 = M.agg4h_closed(h1, now); idx15 = {r[0]: q for q, r in enumerate(rows)}
         for q in range(60, len(r4)):
             ct4 = r4[q][0] + 14400
@@ -121,7 +134,7 @@ def noon(alerts):
         if not g: continue
         ups = [a["up"] for a in g]; dns = [a["dn"] for a in g]
         lines.append(f"{nm} {len(g)}건 평균최고{sum(ups)/len(ups):+.1f} 최대{max(ups):+.1f} 최소{min(ups):+.1f} 평균최저{sum(dns)/len(dns):+.1f} 목표{sum(a["res"]=="목표" for a in g)} 손절{sum(a["res"]=="손절" for a in g)}")
-    for sk in ("short", "short4h"):
+    for sk in [k for k in LABEL if k.startswith("short")]:
       sh = [a for a in done if a["typ"] == sk]
       if sh:
         dns = [a["dn"] for a in sh]; ups = [a["up"] for a in sh]
