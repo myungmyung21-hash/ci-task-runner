@@ -277,7 +277,7 @@ def message(name, stage, info, t, rs=0.0):
         if rs >= 0.02:
             return f"[주요 분석] {cn}", "주요 분석 기사가 올라왔습니다."
         return f"[분석] {cn}", "분석 기사가 올라왔습니다."
-    return f"[단독] {cn}", "단독 기사가 올라왔습니다."
+    return f"3위 [단독] {cn}", "단독 기사가 올라왔습니다."
 
 
 def message_hold(name, info, t, rs=0.0):
@@ -356,7 +356,7 @@ def live(hours=5.75):
                 s4 = short4h_sig(agg4h_closed(candles_1h(kind, sym, 400)))
                 if s4 and state.get(f"{name}:s4") != s4["t"]:
                     state[f"{name}:s4"] = s4["t"]
-                    notify(f"short [사설] {CODE.get(name, name)}", "사설이 올라왔습니다.", 5, "newspaper", TOPIC + "-s")
+                    notify(f"2위 short [사설] {CODE.get(name, name)}", "사설이 올라왔습니다.", 5, "newspaper", TOPIC + "-s")
                     print("ALERT short4h", name)
             rows = candles(kind, sym, limit=120)
             if len(rows) < 60: continue
@@ -375,7 +375,7 @@ def live(hours=5.75):
             sh = short_sig(d, i, ret - btc_ret) if btc_ret is not None else None
             if sh and rows[i][0] - state.get(f"{name}:s", 0) >= 8 * BAR and down_1h(candles_1h(kind, sym)):
                 state[f"{name}:s"] = rows[i][0]
-                title = f"short [해설] {CODE.get(name, name)}"
+                title = f"4위 short [해설] {CODE.get(name, name)}"
                 notify(title, "해설 기사가 올라왔습니다.", 4, "newspaper", TOPIC + "-s")
                 print("ALERT", title)
             hd = hold2(d, i)
@@ -400,7 +400,7 @@ def live(hours=5.75):
             title, body = message(name, st, info, t, rs)
             prio = 4
             if grade == "strong":
-                title, body, prio = f"[1면 단독] {CODE.get(name, name)}", "1면 단독 기사가 올라왔습니다.", 5
+                title, body, prio = f"1위 [1면 단독] {CODE.get(name, name)}", "1면 단독 기사가 올라왔습니다.", 5
             notify(title, body, prio, "newspaper")
             print("ALERT", title, body.replace("\n", " | "))
         json.dump(state, open(stfile, "w"))
