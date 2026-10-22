@@ -209,6 +209,50 @@ def short4h_sig(rows4):
     return dict(price=d["c"][i], stop=d["sar"][i], t=rows4[i][0])
 
 
+MTF = [("15분", 900, 20, 4), ("1시간", 3600, 20, 4), ("4시간", 14400, 20, 2), ("일봉", 86400, 10, 1)]  # (이름, 초, 직전 유지 봉수, 전환 후 유효 봉수)
+
+
+def agg_closed(rows, sec, now=None):
+    now = now or time.time(); out = {}
+    for t, o, h, l, c, v in rows:
+        b = t // sec * sec
+        if b not in out: out[b] = [b, o, h, l, c, v]
+        else:
+            x = out[b]; x[2] = max(x[2], h); x[3] = min(x[3], l); x[4] = c; x[5] += v
+    return [tuple(x) for k, x in sorted(out.items()) if k + sec <= now]
+
+
+def sar_flips(rows, sec, need):
+    """SAR이 need봉 이상 한쪽을 유지하다 전환된 시점 목록: (전환봉 마감시각, 방향 +1 상승/-1 하락)"""
+    if len(rows) < need + 10: return []
+    d = indicators(rows); out = []; run = 0
+    for i in range(2, len(rows)):
+        if d["up"][i] == d["up"][i - 1]: run += 1; continue
+        if run + 1 >= need: out.append((rows[i][0] + sec, 1 if d["up"][i] else -1))
+        run = 0
+    return out
+
+
+def mtf_count(flips_by_tf, T):
+    """시각 T에 '오래 유지 후 막 전환된' 시간봉 개수를 방향별로 센다"""
+    cnt = {1: [], -1: []}
+    for (nm, sec, need, fresh), fl in zip(MTF, flips_by_tf):
+        recent = [x for x in fl if T - fresh * sec < x[0] <= T]
+        if recent: cnt[recent[-1][1]].append(nm)
+    return cnt
+
+
+def candles_1d(kind, sym, limit=80):
+    if kind == "fut":
+        d = get("/futures/usdt/candlesticks", contract=sym, interval="1d", limit=limit) or []
+        rows = [(int(x["t"]), float(x["o"]), float(x["h"]), float(x["l"]), float(x["c"]), float(x.get("sum") or x.get("v") or 0)) for x in d]
+    else:
+        d = get("/spot/candlesticks", currency_pair=sym, interval="1d", limit=limit) or []
+        rows = [(int(x[0]), float(x[5]), float(x[3]), float(x[4]), float(x[2]), float(x[1])) for x in d]
+    now = time.time()
+    return [r for r in sorted({r[0]: r for r in rows}.values()) if r[0] + 86400 <= now]
+
+
 def candles_1h(kind, sym, limit=60):
     if kind == "fut":
         d = get("/futures/usdt/candlesticks", contract=sym, interval="1h", limit=limit) or []
