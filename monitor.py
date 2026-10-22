@@ -209,7 +209,8 @@ def short4h_sig(rows4):
     return dict(price=d["c"][i], stop=d["sar"][i], t=rows4[i][0])
 
 
-MTF = [("15분", 900, 20, 16), ("1시간", 3600, 20, 12), ("4시간", 14400, 20, 6), ("일봉", 86400, 10, 3)]  # (이름, 초, 직전 유지 봉수, 전환 후 유효 봉수)
+MTF = [("15분", 900, 20, 16), ("1시간", 3600, 20, 12), ("4시간", 14400, 10, 6), ("일봉", 86400, 10, 3)]
+MTF_GATE = "4시간"  # 4시간봉이 10봉 이상 유지 후 전환된 경우에만 등급 알림  # (이름, 초, 직전 유지 봉수, 전환 후 유효 봉수)
 
 
 def agg_closed(rows, sec, now=None):
@@ -239,6 +240,9 @@ def mtf_count(flips_by_tf, T):
     for (nm, sec, need, fresh), fl in zip(MTF, flips_by_tf):
         recent = [x for x in fl if T - fresh * sec < x[0] <= T]
         if recent: cnt[recent[-1][1]].append(nm)
+    if MTF_GATE:
+        for k in cnt:
+            if MTF_GATE not in cnt[k]: cnt[k] = []
     return cnt
 
 
