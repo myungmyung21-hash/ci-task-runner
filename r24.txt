@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/runner/work/ci-task-runner/ci-task-runner/research24.py", line 21, in <module>
+    side=[1 if c[q]>d["mb"][q] else -1 for q in range(i-20,i+1)]
+               ^^^^^^^^^^^^^^^
+TypeError: '>' not supported between instances of 'float' and 'NoneType'
