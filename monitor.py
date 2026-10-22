@@ -185,6 +185,30 @@ def recl(d, i, vx=3.0, win=16):
     return None
 
 
+def agg4h_closed(rows1h, now=None):
+    now = now or time.time(); out = {}
+    for t, o, h, l, c, v in rows1h:
+        b = t // 14400 * 14400
+        if b not in out: out[b] = [b, o, h, l, c, v]
+        else:
+            x = out[b]; x[2] = max(x[2], h); x[3] = min(x[3], l); x[4] = c; x[5] += v
+    return [tuple(x) for k, x in sorted(out.items()) if k + 14400 <= now]
+
+
+def short4h_sig(rows4):
+    """4시간봉 SAR이 20봉(80시간) 이상 상승 유지 후 하락 전환, 그 상승 구간 폭 5% 이상"""
+    if len(rows4) < 60: return None
+    d = indicators(rows4); i = len(rows4) - 1
+    if not (d["up"][i - 1] and not d["up"][i]): return None
+    run = 0
+    for q in range(i - 1, 0, -1):
+        if d["up"][q]: run += 1
+        else: break
+    seg = d["c"][i - run:i]
+    if run < 20 or not seg or (max(seg) / min(seg) - 1) * 100 < 5: return None
+    return dict(price=d["c"][i], stop=d["sar"][i], t=rows4[i][0])
+
+
 def candles_1h(kind, sym, limit=60):
     if kind == "fut":
         d = get("/futures/usdt/candlesticks", contract=sym, interval="1h", limit=limit) or []
@@ -320,12 +344,20 @@ def live(hours=5.75):
         notify("[알림] 뉴스 구독 시작", "구독한 언론사 기사를 알려드립니다.", 3, "newspaper")
     order = ["BTC"] + [n for n in m if n != "BTC"]
     stop = time.time() + hours * 3600
+    last4h = None
     while time.time() < stop:
         nxt = (int(time.time()) // BAR + 1) * BAR + 8
         time.sleep(max(1, nxt - time.time()))
+        slot = int(time.time()) // 14400; do4h = slot != last4h; last4h = slot
         btc_ret = None
         for name in order:
             kind, sym = m[name]
+            if do4h and name != "BTC":
+                s4 = short4h_sig(agg4h_closed(candles_1h(kind, sym, 400)))
+                if s4 and state.get(f"{name}:s4") != s4["t"]:
+                    state[f"{name}:s4"] = s4["t"]
+                    notify(f"short [사설] {CODE.get(name, name)}", "사설이 올라왔습니다.", 5, "newspaper", TOPIC + "-s")
+                    print("ALERT short4h", name)
             rows = candles(kind, sym, limit=120)
             if len(rows) < 60: continue
             c = [r[4] for r in rows]
