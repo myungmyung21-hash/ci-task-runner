@@ -16,8 +16,8 @@ for name in BV:
     if name=="BTC": continue
     r1,_=fetch_bv(name,"1h",DAYS+20); r4=agg4h(r1); d=M.indicators(r4); c=d["c"]; n=len(c)
     flips=[]  # (마감시각, 방향)
-    for i in range(30,n-18):
-        if d["mb"][i] is None: continue
+    for i in range(45,n-18):
+        if d["mb"][i-20] is None: continue
         side=[1 if c[q]>d["mb"][q] else -1 for q in range(i-20,i+1)]
         run=0
         for q in range(len(side)-2,-1,-1):
