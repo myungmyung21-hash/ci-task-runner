@@ -431,7 +431,7 @@ def live(hours=5.75):
                 sid = seg_id(c1h[name][1])
                 if do4h:
                     s4 = short4h_sig(agg4h_closed(c1h[name][1]))
-                    if s4 and state.get(f"{name}:s4") != s4["t"]:
+                    if False and s4 and state.get(f"{name}:s4") != s4["t"]:  # 2위 사설 중지(24h 평균 2% 미만)
                         state[f"{name}:s4"] = s4["t"]
                         if cap_ok(state, name, -1, sid):
                             notify(f"2위 short [사설] {CODE.get(name, name)}", "사설이 올라왔습니다.", 5, "newspaper", TOPIC + "-s")
@@ -439,7 +439,7 @@ def live(hours=5.75):
                 cnt = mtf_count(mtf_flips(rows, c1h[name][1], c1d[name][1]), rows[-1][0] + BAR)
                 for dirn in (1, -1):
                     k = len(cnt[dirn]); key = f"{name}:mtf{dirn}"
-                    if k == 4 and k > state.get(key, 0) and cap_ok(state, name, dirn, sid):  # 특집은 0-1위(4개 동시)만
+                    if dirn == 1 and k == 4 and k > state.get(key, 0) and cap_ok(state, name, dirn, sid):  # 0-1위 롱만  # 특집은 0-1위(4개 동시)만
                         lv = 5 - k; cn = CODE.get(name, name); pr = 5 if k >= 3 else (4 if k == 2 else 3)
                         if dirn == 1: notify(f"0-{lv}위 [특집] {cn}", "특집 기사가 올라왔습니다.", pr, "newspaper")
                         else: notify(f"0-{lv}위 short [특집] {cn}", "특집 기사가 올라왔습니다.", pr, "newspaper", TOPIC + "-s")
@@ -458,7 +458,7 @@ def live(hours=5.75):
                 notify(title, body, 5, "newspaper")
                 print("ALERT", title, body.replace("\n", " | "))
             sh = short_sig(d, i, ret - btc_ret) if btc_ret is not None else None
-            if sh and rows[i][0] - state.get(f"{name}:s", 0) >= 8 * BAR and down_1h(c1h[name][1][-60:]) and cap_ok(state, name, -1, sid):
+            if False and sh and rows[i][0] - state.get(f"{name}:s", 0) >= 8 * BAR and down_1h(c1h[name][1][-60:]) and cap_ok(state, name, -1, sid):
                 state[f"{name}:s"] = rows[i][0]
                 title = f"4위 short [해설] {CODE.get(name, name)}"
                 notify(title, "해설 기사가 올라왔습니다.", 4, "newspaper", TOPIC + "-s")
@@ -480,7 +480,7 @@ def live(hours=5.75):
             key = f"{name}:{st}"
             if t - state.get(key, 0) < 8 * BAR: continue
             grade = s2_grade(d, i, candles_1h(kind, sym, 100)) if st == 2 else None
-            if st == 2 and grade is None: continue
+            if st == 2 and grade != "strong": continue  # 1면 단독만(일반 단독은 24h 평균 2% 미만)
             if not cap_ok(state, name, 1, sid): continue
             state[key] = t
             title, body = message(name, st, info, t, rs)
