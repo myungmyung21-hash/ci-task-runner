@@ -104,6 +104,7 @@ def replay(start_t, end_t):
                     if r[2] >= e + 2 * R: res = "목표"; break
         a["res"] = res
         a["dir"] = "하락" if (a["now"] < 0 and -a["dn"] > a["up"]) else "상승"
+    alerts = [a for a in alerts if a["typ"] in ("s2s", "mtf1")]
     return sorted(alerts, key=lambda x: x["t"])
 
 def chunks(head, lines, lim=195):
