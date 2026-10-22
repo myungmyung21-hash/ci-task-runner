@@ -43,7 +43,7 @@ def replay(start_t, end_t):
             cnt = M.mtf_count(fl, ctq)
             for dirn in (1, -1):
                 kk = len(cnt[dirn])
-                if kk > prevk[dirn]:
+                if kk == 4 and kk > prevk[dirn]:
                     lvq = 5 - kk; stop_ = min(r[3] for r in rows[max(0, q - 4):q + 1]) if dirn == 1 else max(r[2] for r in rows[max(0, q - 4):q + 1])
                     alerts.append(dict(name=name, typ=("short_mtf" if dirn == -1 else "mtf") + str(lvq), i=q, t=ctq, entry=rows[q][4], stop=stop_))
                 prevk[dirn] = kk
