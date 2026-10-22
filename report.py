@@ -2,7 +2,7 @@ import os, sys, time, json, requests
 from datetime import datetime, timedelta
 import monitor as M
 
-LABEL = {"s2": "2단계돌파", "s2s": "2단계돌파(강:15분RSI70+·1시간RSI65+)", "short": "short(SAR전환·약세)"}
+LABEL = {"s2": "2단계돌파", "s2s": "2단계돌파(강:15분RSI70+·1시간RSI65+)", "short": "short(SAR전환·약세)", "short4h": "short 4시간전환(20봉+·5%+)"}
 
 def fetch_range(kind, sym, start, end):
     rows, a = [], start
@@ -33,7 +33,14 @@ def replay(start_t, end_t):
     for name, (k, s) in m.items():
         if name == "BTC": continue
         rows = fetch_range(k, s, f0, now); data[name] = rows; state = {}
-        h1 = fetch_1h(k, s, f0 - 70 * 3600, now)
+        h1 = fetch_1h(k, s, f0 - 400 * 3600, now)
+        r4 = M.agg4h_closed(h1, now); idx15 = {r[0]: q for q, r in enumerate(rows)}
+        for q in range(60, len(r4)):
+            ct4 = r4[q][0] + 14400
+            if ct4 < start_t or ct4 > end_t: continue
+            s4 = M.short4h_sig(r4[:q + 1]); qi = idx15.get(ct4 - 900)
+            if s4 and qi is not None:
+                alerts.append(dict(name=name, typ="short4h", i=qi, t=ct4, entry=rows[qi][4], stop=s4["stop"]))
         for i in range(119, len(rows)):
             t = rows[i][0]; ct = t + M.BAR
             if ct < start_t or ct > end_t: continue
@@ -70,7 +77,7 @@ def replay(start_t, end_t):
         a["dn"] = (min(r[3] for r in fut) / e - 1) * 100
         a["now"] = (fut[-1][4] / e - 1) * 100
         res = "진행"
-        if a["typ"] == "short":
+        if a["typ"].startswith("short"):
             R = a["stop"] - e
             if R > 0:
                 for r in fut:
@@ -108,16 +115,17 @@ def noon(alerts):
     done = [a for a in alerts if a.get("up") is not None]
     head = f"[코인 알람 정오 통계] 아침 정리 {len(done)}건 기준(%)"
     lines = []
-    longs = [a for a in done if a["typ"] != "short"]
-    groups = [("롱 전체", longs)] + [(LABEL[k], [a for a in done if a["typ"] == k]) for k in LABEL if k != "short"]
+    longs = [a for a in done if not a["typ"].startswith("short")]
+    groups = [("롱 전체", longs)] + [(LABEL[k], [a for a in done if a["typ"] == k]) for k in LABEL if not k.startswith("short")]
     for nm, g in groups:
         if not g: continue
         ups = [a["up"] for a in g]; dns = [a["dn"] for a in g]
         lines.append(f"{nm} {len(g)}건 평균최고{sum(ups)/len(ups):+.1f} 최대{max(ups):+.1f} 최소{min(ups):+.1f} 평균최저{sum(dns)/len(dns):+.1f} 목표{sum(a["res"]=="목표" for a in g)} 손절{sum(a["res"]=="손절" for a in g)}")
-    sh = [a for a in done if a["typ"] == "short"]
-    if sh:
+    for sk in ("short", "short4h"):
+      sh = [a for a in done if a["typ"] == sk]
+      if sh:
         dns = [a["dn"] for a in sh]; ups = [a["up"] for a in sh]
-        lines.append(f"short {len(sh)}건 평균최저{sum(dns)/len(dns):+.1f} 최대하락{min(dns):+.1f} 최소하락{max(dns):+.1f} 평균역행{sum(ups)/len(ups):+.1f} 목표{sum(a['res']=='목표' for a in sh)} 손절{sum(a['res']=='손절' for a in sh)}")
+        lines.append(f"{LABEL[sk]} {len(sh)}건 평균최저{sum(dns)/len(dns):+.1f} 최대하락{min(dns):+.1f} 최소하락{max(dns):+.1f} 평균역행{sum(ups)/len(ups):+.1f} 목표{sum(a['res']=='목표' for a in sh)} 손절{sum(a['res']=='손절' for a in sh)}")
     if not lines: lines = ["집계할 알람 없음"]
     return chunks(head, lines)
 
