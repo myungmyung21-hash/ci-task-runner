@@ -251,6 +251,23 @@ def mtf_flips(rows15, rows1h, rows1d, now=None):
     return [sar_flips(r, sec, need) for r, (nm, sec, need, fr) in zip(tf, MTF)]
 
 
+def seg_id(rows1h):
+    """1시간봉 SAR이 마지막으로 바뀐 시각(= 지금 흐름의 시작)"""
+    if len(rows1h) < 30: return 0
+    d = indicators(rows1h)
+    for q in range(len(rows1h) - 1, 1, -1):
+        if d["up"][q] != d["up"][q - 1]: return rows1h[q][0]
+    return rows1h[0][0]
+
+
+def cap_ok(state, name, dirn, sid, cap=2):
+    """같은 흐름(1시간 SAR 구간) 안에서는 종목·방향별 최대 cap번만 울림"""
+    key = f"{name}:cap{dirn}"; v = state.get(key)
+    if not v or v[0] != sid: v = [sid, 0]
+    if v[1] >= cap: state[key] = v; return False
+    v[1] += 1; state[key] = v; return True
+
+
 def candles_1d(kind, sym, limit=80):
     if kind == "fut":
         d = get("/futures/usdt/candlesticks", contract=sym, interval="1d", limit=limit) or []
@@ -405,22 +422,24 @@ def live(hours=5.75):
         btc_ret = None
         for name in order:
             kind, sym = m[name]
-            if do4h and name != "BTC":
-                s4 = short4h_sig(agg4h_closed(candles_1h(kind, sym, 400)))
-                if s4 and state.get(f"{name}:s4") != s4["t"]:
-                    state[f"{name}:s4"] = s4["t"]
-                    notify(f"2위 short [사설] {CODE.get(name, name)}", "사설이 올라왔습니다.", 5, "newspaper", TOPIC + "-s")
-                    print("ALERT short4h", name)
             rows = candles(kind, sym, limit=120)
             if len(rows) < 60: continue
             if name != "BTC":
                 hs, ds = int(time.time()) // 3600, int(time.time()) // 86400
                 if c1h.get(name, (None,))[0] != hs: c1h[name] = (hs, candles_1h(kind, sym, 400))
                 if c1d.get(name, (None,))[0] != ds: c1d[name] = (ds, candles_1d(kind, sym, 80))
+                sid = seg_id(c1h[name][1])
+                if do4h:
+                    s4 = short4h_sig(agg4h_closed(c1h[name][1]))
+                    if s4 and state.get(f"{name}:s4") != s4["t"]:
+                        state[f"{name}:s4"] = s4["t"]
+                        if cap_ok(state, name, -1, sid):
+                            notify(f"2위 short [사설] {CODE.get(name, name)}", "사설이 올라왔습니다.", 5, "newspaper", TOPIC + "-s")
+                            print("ALERT short4h", name)
                 cnt = mtf_count(mtf_flips(rows, c1h[name][1], c1d[name][1]), rows[-1][0] + BAR)
                 for dirn in (1, -1):
                     k = len(cnt[dirn]); key = f"{name}:mtf{dirn}"
-                    if k > state.get(key, 0):
+                    if k == 4 and k > state.get(key, 0) and cap_ok(state, name, dirn, sid):  # 특집은 0-1위(4개 동시)만
                         lv = 5 - k; cn = CODE.get(name, name); pr = 5 if k >= 3 else (4 if k == 2 else 3)
                         if dirn == 1: notify(f"0-{lv}위 [특집] {cn}", "특집 기사가 올라왔습니다.", pr, "newspaper")
                         else: notify(f"0-{lv}위 short [특집] {cn}", "특집 기사가 올라왔습니다.", pr, "newspaper", TOPIC + "-s")
@@ -439,7 +458,7 @@ def live(hours=5.75):
                 notify(title, body, 5, "newspaper")
                 print("ALERT", title, body.replace("\n", " | "))
             sh = short_sig(d, i, ret - btc_ret) if btc_ret is not None else None
-            if sh and rows[i][0] - state.get(f"{name}:s", 0) >= 8 * BAR and down_1h(candles_1h(kind, sym)):
+            if sh and rows[i][0] - state.get(f"{name}:s", 0) >= 8 * BAR and down_1h(c1h[name][1][-60:]) and cap_ok(state, name, -1, sid):
                 state[f"{name}:s"] = rows[i][0]
                 title = f"4위 short [해설] {CODE.get(name, name)}"
                 notify(title, "해설 기사가 올라왔습니다.", 4, "newspaper", TOPIC + "-s")
@@ -462,6 +481,7 @@ def live(hours=5.75):
             if t - state.get(key, 0) < 8 * BAR: continue
             grade = s2_grade(d, i, candles_1h(kind, sym, 100)) if st == 2 else None
             if st == 2 and grade is None: continue
+            if not cap_ok(state, name, 1, sid): continue
             state[key] = t
             title, body = message(name, st, info, t, rs)
             prio = 4
