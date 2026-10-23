@@ -50,7 +50,7 @@ def resolve():
     return out, miss
 
 
-def candles(kind, sym, frm=None, to=None, limit=200):
+def candles(kind, sym, frm=None, to=None, limit=200, include_open=False):
     if kind == "fut":
         p = {"contract": sym, "interval": "15m"}
         if frm: p.update({"from": frm, "to": to})
@@ -66,6 +66,7 @@ def candles(kind, sym, frm=None, to=None, limit=200):
         rows = [(int(x[0]), float(x[5]), float(x[3]), float(x[4]), float(x[2]), float(x[1])) for x in d]
     now = time.time()
     rows = sorted({r[0]: r for r in rows}.values())
+    if include_open: return rows  # 진행 중인 봉 포함
     return [r for r in rows if r[0] + BAR <= now]  # 마감된 봉만
 
 
@@ -404,6 +405,26 @@ def backtest(days=30):
     for r in sorted(recent, key=lambda x: x[2]): print(" ", r)
 
 
+ONESHOTS = [  # (상태키, 종목, 방향 +1 롱 / -1 short) — 15분봉 SAR이 진행 중인 봉에서 바뀌는 즉시 1회 알림
+    ("oneshot:WLD:long2", "WLD", 1),
+    ("oneshot:WLD:short", "WLD", -1),
+]
+
+
+def check_oneshots(m, state, stfile):
+    for key, name, dirn in ONESHOTS:
+        if state.get(key) or name not in m: continue
+        kind, sym = m[name]; rows = candles(kind, sym, limit=120, include_open=True)
+        if len(rows) < 60: continue
+        d = indicators(rows); q = len(rows) - 1
+        flipped = ((not d["up"][q - 1]) and d["up"][q]) if dirn == 1 else (d["up"][q - 1] and not d["up"][q])
+        if not flipped: continue
+        state[key] = rows[q][0]; cn = CODE.get(name, name)
+        if dirn == 1: notify(f"[호외] {cn}", "호외가 나왔습니다.", 5, "newspaper")
+        else: notify(f"short [호외] {cn}", "호외가 나왔습니다.", 5, "newspaper", TOPIC + "-s")
+        print("ALERT oneshot", key); json.dump(state, open(stfile, "w"))
+
+
 def live(hours=5.75):
     m, miss = resolve()
     print("RESOLVED", m, "MISSING", miss)
@@ -417,27 +438,16 @@ def live(hours=5.75):
     last4h = None; c1h = {}; c1d = {}
     while time.time() < stop:
         nxt = (int(time.time()) // BAR + 1) * BAR + 8
-        time.sleep(max(1, nxt - time.time()))
+        while time.time() < nxt - 1:
+            time.sleep(max(1, min(30, nxt - time.time())))
+            try: check_oneshots(m, state, stfile)
+            except Exception as e: print("oneshot err", e)
         slot = int(time.time()) // 14400; do4h = slot != last4h; last4h = slot
         btc_ret = None
         for name in order:
             kind, sym = m[name]
             rows = candles(kind, sym, limit=120)
             if len(rows) < 60: continue
-            if name == "WLD" and not state.get("oneshot:WLD"):  # 단건: WLD 15분 SAR 롱 전환 1회만
-                dw = indicators(rows); q = len(rows) - 1
-                if (not dw["up"][q - 1]) and dw["up"][q]:
-                    state["oneshot:WLD"] = rows[q][0]
-                    notify(f"[호외] {CODE.get('WLD', 'WLD')}", "호외가 나왔습니다.", 5, "newspaper")
-                    print("ALERT oneshot WLD")
-                    json.dump(state, open(stfile, "w"))
-            if name == "WLD" and not state.get("oneshot:WLD:short"):  # 단건: WLD 15분 SAR short 전환 1회만
-                dw = indicators(rows); q = len(rows) - 1
-                if dw["up"][q - 1] and not dw["up"][q]:
-                    state["oneshot:WLD:short"] = rows[q][0]
-                    notify(f"short [호외] {CODE.get('WLD', 'WLD')}", "호외가 나왔습니다.", 5, "newspaper", TOPIC + "-s")
-                    print("ALERT oneshot WLD short")
-                    json.dump(state, open(stfile, "w"))
             if name != "BTC":
                 hs, ds = int(time.time()) // 3600, int(time.time()) // 86400
                 if c1h.get(name, (None,))[0] != hs: c1h[name] = (hs, candles_1h(kind, sym, 400))
