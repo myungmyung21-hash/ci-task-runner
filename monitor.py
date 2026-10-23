@@ -405,24 +405,24 @@ def backtest(days=30):
     for r in sorted(recent, key=lambda x: x[2]): print(" ", r)
 
 
-ONESHOTS = [  # (상태키, 종목, 방향 +1 롱 / -1 short) — 15분봉 SAR이 진행 중인 봉에서 바뀌는 즉시 1회 알림
-    ("oneshot:WLD:long2", "WLD", 1),
-    ("oneshot:WLD:short", "WLD", -1),
-]
+WATCH_FLIPS = ["WLD"]  # 15분봉 SAR이 바뀔 때마다(롱·short 모두) 즉시 알림 — 진행 중인 봉 포함
 
 
 def check_oneshots(m, state, stfile):
-    for key, name, dirn in ONESHOTS:
-        if state.get(key) or name not in m: continue
+    for name in WATCH_FLIPS:
+        if name not in m: continue
         kind, sym = m[name]; rows = candles(kind, sym, limit=120, include_open=True)
         if len(rows) < 60: continue
-        d = indicators(rows); q = len(rows) - 1
-        flipped = ((not d["up"][q - 1]) and d["up"][q]) if dirn == 1 else (d["up"][q - 1] and not d["up"][q])
-        if not flipped: continue
-        state[key] = rows[q][0]; cn = CODE.get(name, name)
-        if dirn == 1: notify(f"[호외] {cn}", "호외가 나왔습니다.", 5, "newspaper")
-        else: notify(f"short [호외] {cn}", "호외가 나왔습니다.", 5, "newspaper", TOPIC + "-s")
-        print("ALERT oneshot", key); json.dump(state, open(stfile, "w"))
+        d = indicators(rows); cn = CODE.get(name, name)
+        for q in (len(rows) - 1, len(rows) - 2):  # 진행 중인 봉, 방금 마감된 봉
+            if d["up"][q] == d["up"][q - 1]: continue
+            dirn = 1 if d["up"][q] else -1; key = f"every:{name}:{dirn}"
+            if state.get(key) == rows[q][0]: break
+            state[key] = rows[q][0]
+            if dirn == 1: notify(f"[호외] {cn}", "호외가 나왔습니다.", 5, "newspaper")
+            else: notify(f"short [호외] {cn}", "호외가 나왔습니다.", 5, "newspaper", TOPIC + "-s")
+            print("ALERT flip", name, dirn); json.dump(state, open(stfile, "w"))
+            break
 
 
 def live(hours=5.75):
